@@ -13,9 +13,9 @@
 #include <LiquidCrystal.h>
 
 #define SS_PIN 10
-#define STEP_PIN 2
+#define STEP_PIN 3
 #define RST_PIN 9
-#define DIR_PIN 3
+#define DIR_PIN 2
 #define SLEEP_PIN 4
 #define BUZZER_PIN 5
 #define MAX_CARDS 10
@@ -135,6 +135,7 @@ void loop() {
     lcd.print("Kortti");
     lcd.setCursor(0, 1);
     lcd.print("luettu");
+    delay(1500);
 
     Card card;
     int cardIndex;
@@ -174,7 +175,7 @@ void loop() {
         lcd.setCursor(0, 1);
 
         beep(200);
-        runMotor(8);
+        runMotor(11.5);
     } else {
         for (int i = 0; i < 4; i++) {
             beep(100);
