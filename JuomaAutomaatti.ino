@@ -106,6 +106,14 @@ void setup() {
 
     playStartupSound();
 
+    byte initialized;
+    EEPROM.get(EEPROM_INITIALIZED_FLAG_ADDR, initialized);
+    if (initialized != EEPROM_INITIALIZED_FLAG) {
+        initializeEEPROM();
+        EEPROM.put(EEPROM_INITIALIZED_FLAG_ADDR, EEPROM_INITIALIZED_FLAG);
+        Serial.println("EEPROM alustettu!");
+    }
+
     EEPROM.get(TOTAL_DRINK_COUNT_ADDR, totalDrinkCount);
 
     lcd.begin(16, 2);
@@ -126,7 +134,7 @@ void loop() {
         readUID += String(mfrc522.uid.uidByte[i], HEX);
     }
     readUID.toUpperCase();
-
+    //tulostaa kortin UID:n jotta uusia kortteja on helpompi lisätä järjestelmään.
     Serial.print("Kortin UID: ");
     Serial.println(readUID);
 
@@ -135,7 +143,6 @@ void loop() {
     lcd.print("Kortti");
     lcd.setCursor(0, 1);
     lcd.print("luettu");
-    delay(1500);
 
     Card card;
     int cardIndex;
@@ -175,7 +182,7 @@ void loop() {
         lcd.setCursor(0, 1);
 
         beep(200);
-        runMotor(11.5);
+        runMotor(12.5);
     } else {
         for (int i = 0; i < 4; i++) {
             beep(100);
@@ -184,8 +191,16 @@ void loop() {
 
         lcd.clear();
         lcd.setCursor(0, 0);
-        lcd.print("Tuntematon kortti");
-        delay(1000);
+        lcd.print("Kortti");
+        lcd.setCursor(0, 1);
+        lcd.print("Hylatty!");
+        delay(2000);
+        lcd.clear();
+        lcd.setCursor(0, 0);
+        lcd.print("LUE KORTTI");
+        lcd.setCursor(0, 1);
+        lcd.print("Shotteja: ");
+        lcd.print(totalDrinkCount);
     }
 
     mfrc522.PICC_HaltA();
@@ -199,9 +214,9 @@ void runMotor(int durationSeconds) {
     unsigned long endTime = millis() + (durationSeconds * 1000);
     while (millis() < endTime) {
         digitalWrite(STEP_PIN, HIGH);
-        delayMicroseconds(500);
+        delayMicroseconds(600);
         digitalWrite(STEP_PIN, LOW);
-        delayMicroseconds(500);
+        delayMicroseconds(600);
     }
 
     lcd.clear();
@@ -221,4 +236,4 @@ void runMotor(int durationSeconds) {
     lcd.setCursor(0, 1);
     lcd.print("Shotteja: ");
     lcd.print(totalDrinkCount);
-}
+} 
