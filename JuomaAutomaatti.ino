@@ -5,26 +5,45 @@
 // https://docs.arduino.cc/learn/programming/eeprom-guide/                  //
 // https://forum.arduino.cc/t/stepper-motor-with-driver-a4988/405855        //
 // https://github.com/miguelbalboa/rfid/tree/master                         //
+// TFT-näyttö: Adafruit_ILI9341 + Adafruit_GFX kirjastot                  //
 //////////////////////////////////////////////////////////////////////////////
 #include <SPI.h>
-#include <MFRC522.h>    
+#include <MFRC522.h>
 #include <EEPROM.h>
-#include <Wire.h>
-#include <LiquidCrystal.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_ILI9341.h>
 
-#define SS_PIN 10
-#define STEP_PIN 3
-#define RST_PIN 9
-#define DIR_PIN 2
-#define SLEEP_PIN 4
-#define BUZZER_PIN 5
+// RFID-pinnit
+#define SS_PIN  10
+#define RST_PIN  9
+
+// Moottoriohjain
+#define STEP_PIN    3
+#define DIR_PIN     2
+#define SLEEP_PIN   4
+#define BUZZER_PIN  5
+
+// 3.2" TFT ILI9341 - käyttää samaa SPI-väylää kuin RFID
+// Vapaat pinnit (entiset LCD-pinnit):
+#define TFT_CS  A0
+#define TFT_DC  A1
+#define TFT_RST A2
+
+// Värit
+#define TFT_BLACK   0x0000
+#define TFT_WHITE   0xFFFF
+#define TFT_GREEN   0x07E0
+#define TFT_RED     0xF800
+#define TFT_YELLOW  0xFFE0
+#define TFT_BLUE    0x001F
+#define TFT_CYAN    0x07FF
+
 #define MAX_CARDS 10
-
-#define TOTAL_DRINK_COUNT_ADDR (MAX_CARDS * sizeof(Card))
+#define TOTAL_DRINK_COUNT_ADDR      (MAX_CARDS * sizeof(Card))
 #define EEPROM_INITIALIZED_FLAG_ADDR (TOTAL_DRINK_COUNT_ADDR + sizeof(int))
-#define EEPROM_INITIALIZED_FLAG 123
+#define EEPROM_INITIALIZED_FLAG     123
 
-LiquidCrystal lcd(A0, A1, A2, A3, A4, A5);
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 MFRC522 mfrc522(SS_PIN, RST_PIN);
 
 struct Card {
@@ -40,6 +59,33 @@ Card predefinedCards[MAX_CARDS] = {
 };
 
 int totalDrinkCount = 0;
+
+// Näyttää viestin TFT-näytöllä
+void tftShow(const char* rivi1, const char* rivi2, uint16_t bgColor, uint16_t txtColor) {
+    tft.fillScreen(bgColor);
+    tft.setTextColor(txtColor);
+    tft.setTextSize(3);
+    tft.setCursor(10, 80);
+    tft.println(rivi1);
+    if (rivi2 != nullptr) {
+        tft.setCursor(10, 130);
+        tft.println(rivi2);
+    }
+}
+
+// Näyttää aloitusnäytön
+void naytaAloitusNaytto() {
+    tft.fillScreen(TFT_BLACK);
+    tft.setTextColor(TFT_CYAN);
+    tft.setTextSize(3);
+    tft.setCursor(10, 60);
+    tft.println("LUE KORTTI");
+    tft.setTextColor(TFT_WHITE);
+    tft.setTextSize(2);
+    tft.setCursor(10, 140);
+    tft.print("Shotteja: ");
+    tft.println(totalDrinkCount);
+}
 
 void initializeEEPROM() {
     for (int i = 0; i < MAX_CARDS; i++) {
@@ -104,6 +150,9 @@ void setup() {
     digitalWrite(DIR_PIN, HIGH);
     digitalWrite(SLEEP_PIN, LOW);
 
+    tft.begin();
+    tft.setRotation(1);  // Vaakasuunta (landscape)
+
     playStartupSound();
 
     byte initialized;
@@ -115,13 +164,7 @@ void setup() {
     }
 
     EEPROM.get(TOTAL_DRINK_COUNT_ADDR, totalDrinkCount);
-
-    lcd.begin(16, 2);
-    lcd.setCursor(0, 0);
-    lcd.print("LUE KORTTI");
-    lcd.setCursor(0, 1);
-    lcd.print("Shotteja: ");
-    lcd.print(totalDrinkCount);
+    naytaAloitusNaytto();
 }
 
 void loop() {
@@ -134,15 +177,11 @@ void loop() {
         readUID += String(mfrc522.uid.uidByte[i], HEX);
     }
     readUID.toUpperCase();
-    //tulostaa kortin UID:n jotta uusia kortteja on helpompi lisätä järjestelmään.
+    // Tulostaa kortin UID:n jotta uusia kortteja on helpompi lisätä järjestelmään.
     Serial.print("Kortin UID: ");
     Serial.println(readUID);
 
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Kortti");
-    lcd.setCursor(0, 1);
-    lcd.print("luettu");
+    tftShow("Kortti", "luettu...", TFT_BLUE, TFT_WHITE);
 
     Card card;
     int cardIndex;
@@ -150,24 +189,32 @@ void loop() {
     if (isAuthorized(readUID, card, cardIndex)) {
         beep(100);
 
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Hyvaksytty");
+        tftShow("Hyvaksytty!", nullptr, TFT_GREEN, TFT_BLACK);
         delay(1500);
 
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Kayttaja:");
-        lcd.setCursor(0, 1);
-        lcd.print(card.role);
+        // Näytä käyttäjänimi
+        tft.fillScreen(TFT_BLACK);
+        tft.setTextColor(TFT_YELLOW);
+        tft.setTextSize(2);
+        tft.setCursor(10, 60);
+        tft.println("Kayttaja:");
+        tft.setTextColor(TFT_WHITE);
+        tft.setTextSize(3);
+        tft.setCursor(10, 110);
+        tft.println(card.role);
         delay(2000);
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print(card.role);
-        lcd.setCursor(0, 1);
-        lcd.print("shotit:");
-        lcd.setCursor(8, 1);
-        lcd.print(card.drinkCount);
+
+        // Näytä shotit
+        tft.fillScreen(TFT_BLACK);
+        tft.setTextColor(TFT_CYAN);
+        tft.setTextSize(3);
+        tft.setCursor(10, 60);
+        tft.println(card.role);
+        tft.setTextColor(TFT_WHITE);
+        tft.setTextSize(2);
+        tft.setCursor(10, 130);
+        tft.print("Shotit: ");
+        tft.println(card.drinkCount);
         delay(3000);
 
         card.drinkCount++;
@@ -176,10 +223,7 @@ void loop() {
         totalDrinkCount++;
         EEPROM.put(TOTAL_DRINK_COUNT_ADDR, totalDrinkCount);
 
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Shotti tulossa!");
-        lcd.setCursor(0, 1);
+        tftShow("Shotti", "tulossa!", TFT_BLUE, TFT_YELLOW);
 
         beep(200);
         runMotor(12.5);
@@ -189,18 +233,9 @@ void loop() {
             delay(100);
         }
 
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Kortti");
-        lcd.setCursor(0, 1);
-        lcd.print("Hylatty!");
+        tftShow("Kortti", "Hylatty!", TFT_RED, TFT_WHITE);
         delay(2000);
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("LUE KORTTI");
-        lcd.setCursor(0, 1);
-        lcd.print("Shotteja: ");
-        lcd.print(totalDrinkCount);
+        naytaAloitusNaytto();
     }
 
     mfrc522.PICC_HaltA();
@@ -219,21 +254,11 @@ void runMotor(int durationSeconds) {
         delayMicroseconds(600);
     }
 
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Shotti");
-    lcd.setCursor(0, 1);
-    lcd.print("kaadettu!");
-
+    tftShow("Shotti", "kaadettu!", TFT_GREEN, TFT_BLACK);
     playHappySound();
 
     digitalWrite(SLEEP_PIN, LOW);
     delay(2000);
 
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("LUE KORTTI");
-    lcd.setCursor(0, 1);
-    lcd.print("Shotteja: ");
-    lcd.print(totalDrinkCount);
-} 
+    naytaAloitusNaytto();
+}
